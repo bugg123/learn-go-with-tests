@@ -2,10 +2,19 @@ package perim
 
 import "math"
 
+//Triangle represents a triangle with base and height
+type Triangle struct {
+	Base   float64
+	Height float64
+}
+
+func (t Triangle) Area() float64 {
+	return 0.5 * t.Base * t.Height
+}
 
 //Rectangle represents the width and heigh of a rectangle
-type Rectangle struct{
-	Width float64
+type Rectangle struct {
+	Width  float64
 	Height float64
 }
 
@@ -14,7 +23,7 @@ func (r Rectangle) Area() float64 {
 }
 
 //Circle represents the radius of a circle
-type Circle struct{
+type Circle struct {
 	Radius float64
 }
 
