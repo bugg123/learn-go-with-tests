@@ -1,10 +1,9 @@
 package main
 
 import (
+	"clockface"
 	"os"
 	"time"
-
-	"github.com/quii/learn-go-with-tests/math/v7/clockface"
 )
 
 func main() {

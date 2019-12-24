@@ -2,11 +2,10 @@ package clockface_test
 
 import (
 	"bytes"
+	"clockface"
 	"encoding/xml"
 	"testing"
 	"time"
-
-	"github.com/quii/learn-go-with-tests/math/v7c/clockface"
 )
 
 type SVG struct {
