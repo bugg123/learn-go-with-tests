@@ -5,20 +5,23 @@ import (
 	"log"
 	"os"
 
-	poker "github.com/bugg123/learn-go-with-tests/websockets"
+	poker "github.com/quii/learn-go-with-tests/websockets/v1"
 )
 
 const dbFileName = "game.db.json"
 
 func main() {
-	store, closeFunc, err := poker.FileSystemPlayerStoreFromFile(dbFileName)
+	store, close, err := poker.FileSystemPlayerStoreFromFile(dbFileName)
+
 	if err != nil {
-		log.Fatalf("Unable to create file system player store from file %s %v", dbFileName, err)
+		log.Fatal(err)
 	}
+	defer close()
 
-	defer closeFunc()
+	game := poker.NewTexasHoldem(poker.BlindAlerterFunc(poker.StdOutAlerter), store)
+	cli := poker.NewCLI(os.Stdin, os.Stdout, game)
 
-	fmt.Println("Let's play Poker")
+	fmt.Println("Let's play poker")
 	fmt.Println("Type {Name} wins to record a win")
-	poker.NewCLI(store, os.Stdin, poker.BlindAlerterFunc(poker.StdOutAlerter)).PlayPoker()
+	cli.PlayPoker()
 }

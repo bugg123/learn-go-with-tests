@@ -2,56 +2,68 @@ package poker
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
-const PlayerPrompt = "Please enter the number of players:"
-
+// CLI helps players through a game of poker.
 type CLI struct {
 	playerStore PlayerStore
 	in          *bufio.Scanner
 	out         io.Writer
-	alerter     BlindAlerter
+	game        Game
 }
 
-func NewCLI(store PlayerStore, in io.Reader, out io.Writer, alerter BlindAlerter) *CLI {
+// NewCLI creates a CLI for playing poker.
+func NewCLI(in io.Reader, out io.Writer, game Game) *CLI {
 	return &CLI{
-		playerStore: store,
-		in:          bufio.NewScanner(in),
-		out:         out,
-		alerter:     alerter,
+		in:   bufio.NewScanner(in),
+		out:  out,
+		game: game,
 	}
-
 }
 
-func extractWinner(userInput string) string {
-	return strings.Replace(userInput, " wins", "", 1)
-}
+// PlayerPrompt is the text asking the user for the number of players.
+const PlayerPrompt = "Please enter the number of players: "
 
+// BadPlayerInputErrMsg is the text telling the user they did bad things.
+const BadPlayerInputErrMsg = "Bad value received for number of players, please try again with a number"
+
+// BadWinnerInputMsg is the text telling the user they declared the winner wrong.
+const BadWinnerInputMsg = "invalid winner input, expect format of 'PlayerName wins'"
+
+// PlayPoker starts the game.
 func (cli *CLI) PlayPoker() {
 	fmt.Fprint(cli.out, PlayerPrompt)
 
-	numberOfPlayers, _ := strconv.Atoi(cli.readLine())
+	numberOfPlayers, err := strconv.Atoi(cli.readLine())
 
-	cli.scheduleBlindAlerts(numberOfPlayers)
+	if err != nil {
+		fmt.Fprint(cli.out, BadPlayerInputErrMsg)
+		return
+	}
 
-	userInput := cli.readLine()
-	cli.playerStore.RecordWin(extractWinner(userInput))
+	cli.game.Start(numberOfPlayers)
+
+	winnerInput := cli.readLine()
+	winner, err := extractWinner(winnerInput)
+
+	if err != nil {
+		fmt.Fprint(cli.out, BadWinnerInputMsg)
+		return
+	}
+
+	cli.game.Finish(winner)
 }
 
-func (cli *CLI) scheduleBlindAlerts(numberOfPlayers int) {
-	blindIncrement := time.Duration(5+numberOfPlayers) * time.Minute
-	blinds := []int{100, 200, 300, 400, 500, 600, 800, 1000, 2000, 4000, 8000}
-	blindTime := 0 * time.Second
-	for _, blind := range blinds {
-		cli.alerter.ScheduleAlertAt(blindTime, blind, os.Stdout)
-		blindTime = blindTime + blindIncrement
+func extractWinner(userInput string) (string, error) {
+	if !strings.Contains(userInput, " wins") {
+		return "", errors.New(BadWinnerInputMsg)
 	}
+	return strings.Replace(userInput, " wins", "", 1), nil
 }
 
 func (cli *CLI) readLine() string {
