@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	poker "github.com/bugg123/learn-go-with-tests/time"
+	poker "github.com/bugg123/learn-go-with-tests/websocket"
 )
 
 var dummySpyAlerter = &SpyBlindAlerter{}
