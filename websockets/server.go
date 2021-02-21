@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/websocket"
 )
@@ -27,28 +29,60 @@ type PlayerServer struct {
 	store PlayerStore
 	http.Handler
 	template *template.Template
+	game     Game
 }
 
-const jsonContentType = "application/json"
-const htmlTemplatePath = "game.html"
+const JsonContentType = "application/json"
+const HtmlTemplatePath = "game.html"
 
-// NewPlayerServer creates a PlayerServer with routing configured.
-func NewPlayerServer(store PlayerStore) (*PlayerServer, error) {
-	p := new(PlayerServer)
+type playerServerWS struct {
+	*websocket.Conn
+}
 
-	tmpl, err := template.ParseFiles(htmlTemplatePath)
+func newPlayerServerWS(w http.ResponseWriter, r *http.Request) *playerServerWS {
+	conn, err := wsUpgrader.Upgrade(w, r, nil)
 
 	if err != nil {
-		return nil, fmt.Errorf("problem opening %s %v", htmlTemplatePath, err)
+		log.Printf("problem upgrading connection to Websockets %v\n", err)
 	}
 
+	return &playerServerWS{conn}
+}
+
+func (w *playerServerWS) WaitForMsg() string {
+	_, msg, err := w.ReadMessage()
+	if err != nil {
+		log.Printf("error reading from websocket %v\n", err)
+	}
+	return string(msg)
+}
+
+func (w *playerServerWS) Write(p []byte) (n int, err error) {
+	err = w.WriteMessage(websocket.TextMessage, p)
+	if err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+// NewPlayerServer creates a PlayerServer with routing configured.
+func NewPlayerServer(store PlayerStore, game Game) (*PlayerServer, error) {
+	p := new(PlayerServer)
+
+	tmpl, err := template.ParseFiles(HtmlTemplatePath)
+
+	if err != nil {
+		return nil, fmt.Errorf("problem opening %s %v", HtmlTemplatePath, err)
+	}
+
+	p.game = game
 	p.template = tmpl
 	p.store = store
 
 	router := http.NewServeMux()
 	router.Handle("/league", http.HandlerFunc(p.leagueHandler))
 	router.Handle("/players/", http.HandlerFunc(p.playersHandler))
-	router.Handle("/game", http.HandlerFunc(p.game))
+	router.Handle("/game", http.HandlerFunc(p.playGame))
 	router.Handle("/ws", http.HandlerFunc(p.webSocket))
 
 	p.Handler = router
@@ -62,17 +96,23 @@ var wsUpgrader = websocket.Upgrader{
 }
 
 func (p *PlayerServer) webSocket(w http.ResponseWriter, r *http.Request) {
-	conn, _ := wsUpgrader.Upgrade(w, r, nil)
-	_, winnerMsg, _ := conn.ReadMessage()
-	p.store.RecordWin(string(winnerMsg))
+
+	ws := newPlayerServerWS(w, r)
+
+	numberOfPlayersMsg := ws.WaitForMsg()
+	numberOfPlayers, _ := strconv.Atoi(numberOfPlayersMsg)
+	p.game.Start(numberOfPlayers, ws)
+
+	winner := ws.WaitForMsg()
+	p.game.Finish(string(winner))
 }
 
-func (p *PlayerServer) game(w http.ResponseWriter, r *http.Request) {
+func (p *PlayerServer) playGame(w http.ResponseWriter, r *http.Request) {
 	p.template.Execute(w, nil)
 }
 
 func (p *PlayerServer) leagueHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("content-type", jsonContentType)
+	w.Header().Set("content-type", JsonContentType)
 	json.NewEncoder(w).Encode(p.store.GetLeague())
 }
 

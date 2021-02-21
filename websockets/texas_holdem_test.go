@@ -2,9 +2,12 @@ package poker_test
 
 import (
 	"fmt"
-	"github.com/quii/learn-go-with-tests/websockets/v1"
+	"io/ioutil"
 	"testing"
 	"time"
+
+	poker "github.com/bugg123/learn-go-with-tests/websockets"
+	"github.com/gorilla/websocket"
 )
 
 func TestGame_Start(t *testing.T) {
@@ -12,7 +15,7 @@ func TestGame_Start(t *testing.T) {
 		blindAlerter := &poker.SpyBlindAlerter{}
 		game := poker.NewTexasHoldem(blindAlerter, dummyPlayerStore)
 
-		game.Start(5)
+		game.Start(5, ioutil.Discard)
 
 		cases := []poker.ScheduledAlert{
 			{At: 0 * time.Second, Amount: 100},
@@ -35,7 +38,7 @@ func TestGame_Start(t *testing.T) {
 		blindAlerter := &poker.SpyBlindAlerter{}
 		game := poker.NewTexasHoldem(blindAlerter, dummyPlayerStore)
 
-		game.Start(7)
+		game.Start(7, ioutil.Discard)
 
 		cases := []poker.ScheduledAlert{
 			{At: 0 * time.Second, Amount: 100},
@@ -69,5 +72,29 @@ func checkSchedulingCases(cases []poker.ScheduledAlert, t *testing.T, blindAlert
 			got := blindAlerter.Alerts[i]
 			assertScheduledAlert(t, got, want)
 		})
+	}
+}
+
+func assertWebsocketGotMsg(t *testing.T, ws *websocket.Conn, want string) {
+	_, msg, _ := ws.ReadMessage()
+	if string(msg) != want {
+		t.Errorf(`got "%s", want "%s"`, string(msg), want)
+	}
+}
+
+func within(t testing.TB, d time.Duration, assert func()) {
+	t.Helper()
+
+	done := make(chan struct{}, 1)
+
+	go func() {
+		assert()
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-time.After(d):
+		t.Error("timed out")
+	case <-done:
 	}
 }

@@ -3,10 +3,12 @@ package poker_test
 import (
 	"bytes"
 	"io"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
-	poker "github.com/quii/learn-go-with-tests/websockets/v1"
+	poker "github.com/bugg123/learn-go-with-tests/websockets"
 )
 
 var dummyBlindAlerter = &poker.SpyBlindAlerter{}
@@ -17,14 +19,16 @@ var dummyStdOut = &bytes.Buffer{}
 type GameSpy struct {
 	StartCalled     bool
 	StartCalledWith int
+	BlindAlert      []byte
 
 	FinishedCalled   bool
 	FinishCalledWith string
 }
 
-func (g *GameSpy) Start(numberOfPlayers int) {
+func (g *GameSpy) Start(numberOfPlayers int, destination io.Writer) {
 	g.StartCalled = true
 	g.StartCalledWith = numberOfPlayers
+	destination.Write(g.BlindAlert)
 }
 
 func (g *GameSpy) Finish(winner string) {
@@ -37,6 +41,28 @@ func userSends(messages ...string) io.Reader {
 }
 
 func TestCLI(t *testing.T) {
+
+	t.Run("start a game with 3 players and declare Ruth the winner", func(t *testing.T) {
+		wantedBlindAlert := "Blind is 100"
+		winner := "Ruth"
+		game := &GameSpy{BlindAlert: []byte(wantedBlindAlert)}
+		server := httptest.NewServer(MustMakePlayerServer(t, dummyPlayerStore, game))
+		ws := MustDialWS(t, "ws"+strings.TrimPrefix(server.URL, "http")+"/ws")
+
+		defer server.Close()
+		defer ws.Close()
+
+		writeWSMessage(t, ws, "3")
+		writeWSMessage(t, ws, winner)
+
+		time.Sleep(tenMS)
+		assertGameStartedWith(t, game, 3)
+		assertFinishCalledWith(t, game, winner)
+
+		within(t, tenMS, func() {
+			assertWebsocketGotMsg(t, ws, wantedBlindAlert)
+		})
+	})
 
 	t.Run("start game with 3 players and finish game with 'Chris' as winner", func(t *testing.T) {
 		game := &GameSpy{}
